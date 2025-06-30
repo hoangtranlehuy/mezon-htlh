@@ -1,16 +1,11 @@
 import { ActionEmitEvent, CheckIcon } from '@mezon/mobile-components';
 import { baseColor, useTheme } from '@mezon/mobile-ui';
-import { appActions, useAppDispatch } from '@mezon/store-mobile';
-import {
-	Album,
-	CameraRoll,
-	iosReadGalleryPermission,
-	iosRefreshGallerySelection,
-	iosRequestReadWriteGalleryPermission
-} from '@react-native-camera-roll/camera-roll';
-import { useEffect, useRef, useState } from 'react';
-import { Alert, DeviceEventEmitter, Image, Linking, PermissionsAndroid, Platform, Text, TouchableOpacity, View } from 'react-native';
+import { useAppDispatch } from '@mezon/store-mobile';
+import { Album, CameraRoll } from '@react-native-camera-roll/camera-roll';
+import { useEffect, useState } from 'react';
+import { DeviceEventEmitter, Image, Text, TouchableOpacity, View } from 'react-native';
 import { FlatList } from 'react-native-gesture-handler';
+import { useGalleryPermission } from '../../../hooks/useImage';
 import { style } from './styles';
 
 interface AlbumWithCover extends Album {
@@ -27,7 +22,8 @@ export const AlbumPanel = ({ valueAlbum, onAlbumChange }: IAlbumProps) => {
 	const styles = style(themeValue);
 	const [albums, setAlbums] = useState<AlbumWithCover[]>([]);
 	const dispatch = useAppDispatch();
-	const timerRef = useRef<any>();
+	// const timerRef = useRef<any>();
+	const { requestGalleryPermission, timerRef } = useGalleryPermission();
 
 	useEffect(() => {
 		checkAndRequestPermissions();
@@ -38,130 +34,17 @@ export const AlbumPanel = ({ valueAlbum, onAlbumChange }: IAlbumProps) => {
 	}, []);
 
 	const checkAndRequestPermissions = async () => {
-		const hasPermission = await requestPermission();
+		const hasPermission = await requestGalleryPermission();
 		if (hasPermission) {
 			getAlbums();
 		} else {
-			await requestPermission();
-		}
-	};
-
-	const alertOpenSettings = (title?: string, desc?: string) => {
-		Alert.alert(title || 'Photo Permission', desc || 'App needs access to your photo library', [
-			{
-				text: 'Cancel',
-				style: 'cancel'
-			},
-			{
-				text: 'OK',
-				onPress: () => {
-					openAppSettings();
-				}
-			}
-		]);
-	};
-
-	const getCheckPermissionPromise = async () => {
-		try {
-			if (Platform.OS === 'android') {
-				if (Platform.Version >= 33) {
-					const hasImagePermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
-					const hasVideoPermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO);
-
-					return hasImagePermission && hasVideoPermission;
-				} else {
-					return await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
-				}
-			}
-			return false;
-		} catch (error) {
-			console.warn('Permission check error:', error);
-			return false;
+			await requestGalleryPermission();
 		}
 	};
 
 	const handleSelectAlbum = (album: AlbumWithCover) => {
 		onAlbumChange(album?.title);
 		DeviceEventEmitter.emit(ActionEmitEvent.ON_SELECT_ALBUM, album?.title || '');
-	};
-
-	const requestPermission = async () => {
-		if (Platform.OS === 'android') {
-			dispatch(appActions.setIsFromFCMMobile(true));
-			const hasPermission = await getCheckPermissionPromise();
-			if (hasPermission) {
-				return true;
-			}
-
-			try {
-				// For Android 13+ (API 33+)
-				if (Platform.Version >= 33) {
-					const granted = await PermissionsAndroid.requestMultiple([
-						PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
-						PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO
-					]);
-
-					timerRef.current = setTimeout(() => dispatch(appActions.setIsFromFCMMobile(false)), 2000);
-
-					if (
-						granted['android.permission.READ_MEDIA_IMAGES'] !== PermissionsAndroid.RESULTS.GRANTED ||
-						granted['android.permission.READ_MEDIA_VIDEO'] !== PermissionsAndroid.RESULTS.GRANTED
-					) {
-						alertOpenSettings();
-					}
-
-					return (
-						granted['android.permission.READ_MEDIA_IMAGES'] === PermissionsAndroid.RESULTS.GRANTED &&
-						granted['android.permission.READ_MEDIA_VIDEO'] === PermissionsAndroid.RESULTS.GRANTED
-					);
-				}
-				// For Android 12 and below
-				else {
-					const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE, {
-						title: 'Photo Library Access',
-						message: 'This app needs access to your photo library.',
-						buttonNeutral: 'Ask Me Later',
-						buttonNegative: 'Cancel',
-						buttonPositive: 'OK'
-					});
-
-					timerRef.current = setTimeout(() => dispatch(appActions.setIsFromFCMMobile(false)), 2000);
-
-					if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-						alertOpenSettings();
-					}
-
-					return granted === PermissionsAndroid.RESULTS.GRANTED;
-				}
-			} catch (err) {
-				console.warn('Permission request error:', err);
-				return false;
-			}
-		} else if (Platform.OS === 'ios') {
-			dispatch(appActions.setIsFromFCMMobile(true));
-
-			const result = await iosReadGalleryPermission('readWrite');
-			timerRef.current = setTimeout(() => dispatch(appActions.setIsFromFCMMobile(false)), 2000);
-
-			if (result === 'not-determined' || result === 'denied') {
-				const requestResult = await iosRequestReadWriteGalleryPermission();
-				return requestResult === 'granted' || requestResult === 'limited';
-			} else if (result === 'limited') {
-				await iosRefreshGallerySelection();
-			}
-
-			return result === 'granted' || result === 'limited';
-		}
-
-		return false;
-	};
-
-	const openAppSettings = () => {
-		if (Platform.OS === 'ios') {
-			Linking.openURL('app-settings:');
-		} else {
-			Linking.openSettings();
-		}
 	};
 
 	const getAlbums = async () => {

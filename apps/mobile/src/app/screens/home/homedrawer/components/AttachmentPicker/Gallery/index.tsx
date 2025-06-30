@@ -1,16 +1,13 @@
 import { useReference } from '@mezon/core';
 import { ActionEmitEvent } from '@mezon/mobile-components';
 import { useTheme } from '@mezon/mobile-ui';
-import { appActions, useAppDispatch } from '@mezon/store-mobile';
 import { MAX_FILE_SIZE } from '@mezon/utils';
 import {
 	CameraRoll,
 	PhotoIdentifier,
-	cameraRollEventEmitter,
-	iosRefreshGallerySelection,
-	iosRequestReadWriteGalleryPermission
+	cameraRollEventEmitter
 } from '@react-native-camera-roll/camera-roll';
-import { iosReadGalleryPermission } from '@react-native-camera-roll/camera-roll/src/CameraRollIOSPermission';
+import { useGalleryPermission } from 'apps/mobile/src/app/hooks/useImage';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -47,10 +44,9 @@ const Gallery = ({ onPickGallery, currentChannelId }: IProps) => {
 	const [currentAlbums, setCurrentAlbums] = useState<string>('All');
 	const [pageInfo, setPageInfo] = useState(null);
 	const [isLoadingMore, setIsLoadingMore] = useState(false);
-	const dispatch = useAppDispatch();
-	const timerRef = useRef<any>(null);
 	const haveLoadMorePhoto = useRef<any>(false);
 	const { removeAttachmentByIndex, attachmentFilteredByChannelId } = useReference(currentChannelId);
+	const { requestGalleryPermission, timerRef } = useGalleryPermission();
 
 	const isDisableSelectAttachment = useMemo(() => {
 		if (!attachmentFilteredByChannelId) return false;
@@ -94,124 +90,11 @@ const Gallery = ({ onPickGallery, currentChannelId }: IProps) => {
 	}, [currentAlbums]);
 
 	const checkAndRequestPermissions = async () => {
-		const hasPermission = await requestPermission();
+		const hasPermission = await requestGalleryPermission();
 		if (hasPermission) {
 			loadPhotos(currentAlbums);
 		} else {
-			await requestPermission();
-		}
-	};
-
-	const alertOpenSettings = (title?: string, desc?: string) => {
-		Alert.alert(title || 'Photo Permission', desc || 'App needs access to your photo library', [
-			{
-				text: 'Cancel',
-				style: 'cancel'
-			},
-			{
-				text: 'OK',
-				onPress: () => {
-					openAppSettings();
-				}
-			}
-		]);
-	};
-
-	const getCheckPermissionPromise = async () => {
-		try {
-			if (Platform.OS === 'android') {
-				if (Platform.Version >= 33) {
-					const hasImagePermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
-					const hasVideoPermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO);
-
-					return hasImagePermission && hasVideoPermission;
-				} else {
-					return await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
-				}
-			}
-			return false;
-		} catch (error) {
-			console.warn('Permission check error:', error);
-			return false;
-		}
-	};
-
-	const requestPermission = async () => {
-		if (Platform.OS === 'android') {
-			dispatch(appActions.setIsFromFCMMobile(true));
-			const hasPermission = await getCheckPermissionPromise();
-			if (hasPermission) {
-				return true;
-			}
-
-			try {
-				// For Android 13+ (API 33+)
-				if (Platform.Version >= 33) {
-					const granted = await PermissionsAndroid.requestMultiple([
-						PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
-						PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO
-					]);
-
-					timerRef.current = setTimeout(() => dispatch(appActions.setIsFromFCMMobile(false)), 2000);
-
-					if (
-						granted['android.permission.READ_MEDIA_IMAGES'] !== PermissionsAndroid.RESULTS.GRANTED ||
-						granted['android.permission.READ_MEDIA_VIDEO'] !== PermissionsAndroid.RESULTS.GRANTED
-					) {
-						alertOpenSettings();
-					}
-
-					return (
-						granted['android.permission.READ_MEDIA_IMAGES'] === PermissionsAndroid.RESULTS.GRANTED &&
-						granted['android.permission.READ_MEDIA_VIDEO'] === PermissionsAndroid.RESULTS.GRANTED
-					);
-				}
-				// For Android 12 and below
-				else {
-					const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE, {
-						title: 'Photo Library Access',
-						message: 'This app needs access to your photo library.',
-						buttonNeutral: 'Ask Me Later',
-						buttonNegative: 'Cancel',
-						buttonPositive: 'OK'
-					});
-
-					timerRef.current = setTimeout(() => dispatch(appActions.setIsFromFCMMobile(false)), 2000);
-
-					if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-						alertOpenSettings();
-					}
-
-					return granted === PermissionsAndroid.RESULTS.GRANTED;
-				}
-			} catch (err) {
-				console.warn('Permission request error:', err);
-				return false;
-			}
-		} else if (Platform.OS === 'ios') {
-			dispatch(appActions.setIsFromFCMMobile(true));
-
-			const result = await iosReadGalleryPermission('readWrite');
-			timerRef.current = setTimeout(() => dispatch(appActions.setIsFromFCMMobile(false)), 2000);
-
-			if (result === 'not-determined' || result === 'denied') {
-				const requestResult = await iosRequestReadWriteGalleryPermission();
-				return requestResult === 'granted' || requestResult === 'limited';
-			} else if (result === 'limited') {
-				await iosRefreshGallerySelection();
-			}
-
-			return result === 'granted' || result === 'limited';
-		}
-
-		return false;
-	};
-
-	const openAppSettings = () => {
-		if (Platform.OS === 'ios') {
-			Linking.openURL('app-settings:');
-		} else {
-			Linking.openSettings();
+			await requestGalleryPermission();
 		}
 	};
 
