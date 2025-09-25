@@ -14,6 +14,7 @@ import { DisconnectReason, RoomEvent } from 'livekit-client';
 import LottieView from 'lottie-react-native';
 import { ChannelStreamMode } from 'mezon-js';
 import React, { memo, useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { DeviceEventEmitter, Dimensions, Platform, Text, TouchableOpacity, View } from 'react-native';
 import { ResumableZoom } from 'react-native-zoom-toolkit';
 import { useSelector } from 'react-redux';
@@ -25,6 +26,7 @@ import { ContainerMessageActionModal } from '../../MessageItemBS/ContainerMessag
 import ControlBottomBar from '../ControlBottomBar';
 import FocusedScreenPopup from '../FocusedScreenPopup';
 import ParticipantScreen from '../ParticipantScreen';
+import ReasonPopup from '../ReasonPopup';
 import { style } from '../styles';
 
 const RoomViewListener = memo(
@@ -44,6 +46,7 @@ const RoomViewListener = memo(
 		const participants = useParticipants();
 		const dispatch = useAppDispatch();
 		const room: any = useRoomContext();
+		const { t } = useTranslation(['channelVoice']);
 
 		useEffect(() => {
 			if (participants?.length > 1 && isShowPreCallInterface) {
@@ -61,9 +64,20 @@ const RoomViewListener = memo(
 			}
 		}, [participants, focusedScreenShare]);
 
+		const getReasonContent = (reason: DisconnectReason) => {
+			switch (reason) {
+				case DisconnectReason.PARTICIPANT_REMOVED:
+					return t('disconnectModal.content.removed');
+				case DisconnectReason.DUPLICATE_IDENTITY:
+					return t('disconnectModal.content.duplicate');
+				default:
+					return t('disconnectModal.content.default');
+			}
+		};
+
 		const handleDisconnected = useCallback(
 			async (reason?: DisconnectReason) => {
-				if (reason === DisconnectReason.PARTICIPANT_REMOVED) {
+				if (reason === DisconnectReason.PARTICIPANT_REMOVED || reason === DisconnectReason.DUPLICATE_IDENTITY) {
 					DeviceEventEmitter.emit(ActionEmitEvent.ON_OPEN_MEZON_MEET, {
 						isEndCall: true,
 						clanId,
@@ -71,9 +85,14 @@ const RoomViewListener = memo(
 						roomId: room?.roomInfo?.sid as string
 					});
 					room.disconnect();
+					const content = getReasonContent(reason);
+					const data = {
+						children: <ReasonPopup title={t('disconnectModal.title')} confirmText={t('disconnectModal.confirm')} content={content} />
+					};
+					DeviceEventEmitter.emit(ActionEmitEvent.ON_TRIGGER_MODAL, { isDismiss: false, data });
 				}
 			},
-			[channelId, clanId, room]
+			[channelId, clanId, room, t]
 		);
 
 		useEffect(() => {

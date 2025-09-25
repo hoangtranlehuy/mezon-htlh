@@ -110,7 +110,7 @@ const ChannelVoicePopup = ({ isFromNativeCall = false }) => {
 				channel_id: channelId,
 				display_name: userProfile?.user?.display_name ?? '',
 				state,
-				room_name: roomId
+				room_name: state === ParticipantMeetState.LEAVE ? 'leave' : roomId || ''
 			})
 		);
 	};

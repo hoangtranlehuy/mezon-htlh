@@ -27,5 +27,14 @@
         "title": "Kick member",
         "content": "Are you sure you want to kick \"{{userName}}\"?",
         "kick": "Kick"
+    },
+    "disconnectModal": {
+        "title": "Voice Disconnected",
+        "content": {
+            "removed": "You have been removed from the voice channel",
+            "duplicate": "You have been disconnected due to another join",
+            "default": "You have been disconnected from the voice channel"
+        },
+        "confirm": "Confirm"
     }
 }

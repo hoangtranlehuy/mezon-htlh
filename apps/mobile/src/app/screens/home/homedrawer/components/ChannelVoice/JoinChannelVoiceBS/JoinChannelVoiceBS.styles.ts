@@ -18,7 +18,7 @@ export const style = (colors: Attributes) =>
 			justifyContent: 'center',
 			alignItems: 'center'
 		},
-		textBtnJoinVoice: { fontSize: size.s_16, fontWeight: '600', color: baseColor.black },
+		textBtnJoinVoice: { fontSize: size.s_16, fontWeight: '600', color: baseColor.white },
 		avatarCircle: {
 			width: size.s_40,
 			height: size.s_40,
