@@ -476,6 +476,7 @@ const Notifications = ({ navigation, route }) => {
 				<SkeletonNotification numberSkeleton={8} />
 			) : notificationsFilter?.length ? (
 				<FlatList
+					key={`notification_${selectedTabs}`}
 					showsVerticalScrollIndicator={false}
 					data={notificationsFilter}
 					renderItem={renderItem}
